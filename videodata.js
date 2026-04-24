@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         B站视频播放量和互动量（修复稳定版）
-// @version      3.2.0
-// @description  辅助查看B站视频播放量、互动量，并复制横向填表数据
+// @name         B站视频播放量和互动量数据
+// @version      3.3.1
+// @description  辅助查看B站视频播放量、互动量，仅保留右下角浮窗
 // @author       alicechino
 // @namespace    https://github.com/alicechino/Blibili-Up-data/
 // @match        *://www.bilibili.com/video/*
@@ -33,7 +33,6 @@
 
   injectStyle();
   createPanel();
-  createButtons();
   watchUrlChange();
   start();
 
@@ -305,7 +304,7 @@
         <div class="bvdp-title">B站视频数据</div>
         <div class="bvdp-actions">
           <button type="button" id="bvdp-refresh">刷新</button>
-          <button type="button" id="bvdp-copy-main">复制1</button>
+          <button type="button" id="bvdp-copy-main">复制</button>
           <button type="button" id="bvdp-collapse">—</button>
         </div>
       </div>
@@ -322,70 +321,13 @@
 
     document.querySelector('#bvdp-copy-main').addEventListener('click', () => {
       if (!currentData) return;
-      copyText(getCopyForms(currentData).formData1, '复制1');
+      copyText(getCopyForms(currentData).formData1, '复制');
     });
 
     document.querySelector('#bvdp-collapse').addEventListener('click', () => {
       panel.classList.toggle('collapsed');
       document.querySelector('#bvdp-collapse').textContent = panel.classList.contains('collapsed') ? '+' : '—';
     });
-  }
-
-  function createButtons() {
-    if (document.querySelector('#bili-video-data-buttons')) return;
-
-    const box = document.createElement('div');
-    box.id = 'bili-video-data-buttons';
-
-    const buttons = [
-      {
-        id: 'getInfoBtn1',
-        text: '填表数据1',
-        getText: data => getCopyForms(data).formData1,
-      },
-      {
-        id: 'getInfoBtn2',
-        text: '填表数据2',
-        getText: data => getCopyForms(data).formData2,
-      },
-      {
-        id: 'getInfoBtn3',
-        text: '完整数据',
-        getText: data => getCopyForms(data).detailData,
-      },
-      {
-        id: 'getInfoBtn4',
-        text: '舆情报告',
-        getText: data => getCopyForms(data).formYuQing,
-      },
-      {
-        id: 'getInfoBtn5',
-        text: '标题链接',
-        getText: data => getCopyForms(data).formData3,
-      },
-    ];
-
-    buttons.forEach(item => {
-      const btn = document.createElement('button');
-      btn.id = item.id;
-      btn.type = 'button';
-      btn.textContent = item.text;
-
-      btn.addEventListener('click', async () => {
-        if (!currentData) await loadVideoData(false);
-
-        if (!currentData) {
-          alert('还没有读取到视频数据');
-          return;
-        }
-
-        copyText(item.getText(currentData), item.text, btn);
-      });
-
-      box.appendChild(btn);
-    });
-
-    document.body.appendChild(box);
   }
 
   function getCopyForms(data) {
@@ -404,48 +346,8 @@
       data.share,
     ].join('\t');
 
-    const formData2 = [
-      data.upName,
-      data.title,
-      data.url,
-      data.view,
-      data.publishTime,
-      data.reply,
-    ].join('\t');
-
-    const formYuQing = `标题：${data.title}
-VV: ${data.view}，Eng: ${data.engage}
-${data.url}
-
-内容：
-`;
-
-    const formData3 = `标题：${data.title}
-${data.url}`;
-
-    const detailData = [
-      data.upName,
-      data.title,
-      data.url,
-      data.publishTime,
-      data.view,
-      data.engage,
-      data.reply,
-      data.danmaku,
-      data.like,
-      data.coin,
-      data.favorite,
-      data.share,
-      data.follower,
-      data.matchedKeywordIndexes.length ? data.matchedKeywordIndexes.join('') : '0',
-    ].join('\t');
-
     return {
       formData1,
-      formData2,
-      formYuQing,
-      formData3,
-      detailData,
     };
   }
 
@@ -519,35 +421,6 @@ ${data.url}`;
     const style = document.createElement('style');
     style.id = 'bili-video-data-style';
     style.textContent = `
-      #bili-video-data-buttons {
-        position: fixed;
-        left: 10px;
-        top: 10px;
-        z-index: 999999;
-        display: flex;
-        gap: 6px;
-        align-items: center;
-        flex-wrap: wrap;
-        max-width: 620px;
-      }
-
-      #bili-video-data-buttons button {
-        border: 1px solid #d9d9d9;
-        background: #fff;
-        color: #111;
-        border-radius: 7px;
-        padding: 5px 9px;
-        font-size: 14px;
-        line-height: 1.2;
-        cursor: pointer;
-        box-shadow: 0 2px 8px rgba(0,0,0,.08);
-      }
-
-      #bili-video-data-buttons button:hover {
-        color: #00aeec;
-        border-color: #00aeec;
-      }
-
       #bili-video-data-panel {
         position: fixed;
         right: 18px;
@@ -707,12 +580,6 @@ ${data.url}`;
         .bvdp-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
-
-        #bili-video-data-buttons {
-          top: 8px;
-          left: 8px;
-          right: 8px;
-        }
       }
     `;
 
@@ -728,8 +595,6 @@ ${data.url}`;
       } else {
         fallbackCopyText(text);
       }
-
-      voiceNotice(349.23);
 
       if (btn) {
         flashButton(btn, '已复制');
@@ -764,27 +629,6 @@ ${data.url}`;
     setTimeout(() => {
       btn.textContent = old;
     }, 900);
-  }
-
-  function voiceNotice(freq) {
-    try {
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const oscillator = audioCtx.createOscillator();
-      const gainNode = audioCtx.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioCtx.destination);
-
-      oscillator.type = 'sine';
-      oscillator.frequency.value = freq;
-
-      gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-      gainNode.gain.linearRampToValueAtTime(0.55, audioCtx.currentTime + 0.01);
-
-      oscillator.start();
-      gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
-      oscillator.stop(audioCtx.currentTime + 0.35);
-    } catch (_) {}
   }
 
   function getDomTitle() {
