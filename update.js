@@ -3,7 +3,7 @@
 // @namespace    https://github.com/alicechino/Blibili-Up-data
 // @version      4.0.1
 // @description  在B站UP主页右下角显示UP主数据分析，修复新版空间页投稿接口、DOM失效、近30均赞不显示问题
-// @author       Her-ero / updated
+// @author       alicechino
 // @match        *://space.bilibili.com/*
 // @icon         https://static.hdslb.com/images/favicon.ico
 // @require      https://cdn.jsdelivr.net/npm/blueimp-md5@2.19.0/js/md5.min.js
