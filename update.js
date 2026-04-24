@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         B站UP主数据分析（WBI修复版）
+// @name         B站UP主数据分析
 // @namespace    https://github.com/alicechino/Blibili-Up-data
 // @version      4.0.1
 // @description  在B站UP主页右下角显示UP主数据分析，修复新版空间页投稿接口、DOM失效、近30均赞不显示问题
