@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         B站视频播放量和互动量数据
-// @version      3.3.1
-// @description  辅助查看B站视频播放量、互动量，仅保留右下角浮窗
+// @name         B站视频播放量和互动量
+// @version      3.4.0
+// @description  查看B站视频播放量、互动量、标签、简介，并复制横向填表数据
 // @author       alicechino
 // @namespace    https://github.com/alicechino/Blibili-Up-data/
 // @match        *://www.bilibili.com/video/*
@@ -57,7 +57,6 @@
     }
 
     const videoKey = id.bvid ? id.bvid : `av${id.aid}`;
-
     if (silent && videoKey === lastVideoKey && currentData) return;
 
     running = true;
@@ -105,6 +104,7 @@
       : `${window.location.origin}${window.location.pathname}`;
 
     const title = video.title || getDomTitle() || '';
+    const desc = normalizeText(video.desc || '');
     const upName = video.owner?.name || getDomUpName() || '';
     const mid = video.owner?.mid || 0;
 
@@ -139,6 +139,7 @@
       mid,
       url,
       title,
+      desc,
       upName,
       publishTime,
       view,
@@ -331,10 +332,15 @@
   }
 
   function getCopyForms(data) {
+    const tagsText = Array.isArray(data.tags) ? data.tags.join(' / ') : '';
+    const descText = normalizeText(data.desc || '');
+
     const formData1 = [
       data.upName,
       data.title,
       data.url,
+      tagsText,
+      descText,
       data.publishTime,
       data.view,
       data.engage,
@@ -355,9 +361,13 @@
     const body = document.querySelector('#bvdp-body');
     if (!body) return;
 
+    const tagsText = Array.isArray(data.tags) ? data.tags.join(' / ') : '-';
+
     body.innerHTML = `
       <div class="bvdp-video-title" title="${escapeHtml(data.title)}">${escapeHtml(data.title)}</div>
       <div class="bvdp-up">UP：${escapeHtml(data.upName || '-')} ${data.follower ? `｜粉丝：${fmt(data.follower)}` : ''}</div>
+      <div class="bvdp-time">标签：${escapeHtml(tagsText)}</div>
+      <div class="bvdp-desc">简介：${escapeHtml(data.desc || '-')}</div>
       <div class="bvdp-time">发布时间：${escapeHtml(data.publishTime || '-')}</div>
 
       <div class="bvdp-grid">
@@ -376,10 +386,6 @@
         <div>赞播比：${percent(data.like, data.view)}</div>
         <div>评播比：${percent(data.reply, data.view)}</div>
         <div>更新时间：${formatTime(data.updateTime)}</div>
-      </div>
-
-      <div class="bvdp-tags">
-        ${data.tags.length ? data.tags.map(tag => `<span>${escapeHtml(tag)}</span>`).join('') : '<span>无标签</span>'}
       </div>
     `;
   }
@@ -426,7 +432,7 @@
         right: 18px;
         bottom: 18px;
         z-index: 999999;
-        width: 420px;
+        width: 460px;
         max-width: calc(100vw - 36px);
         background: #fff;
         color: #222;
@@ -493,6 +499,20 @@
         margin-bottom: 4px;
       }
 
+      .bvdp-desc {
+        color: #666;
+        font-size: 12px;
+        margin-bottom: 4px;
+        max-height: 54px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        border: 1px solid #f0f0f0;
+        border-radius: 6px;
+        padding: 5px;
+        background: #fafafa;
+      }
+
       .bvdp-grid {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -535,22 +555,6 @@
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px 8px;
         color: #666;
-        font-size: 12px;
-      }
-
-      .bvdp-tags {
-        margin-top: 8px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 5px;
-      }
-
-      .bvdp-tags span {
-        border: 1px solid #eee;
-        background: #fafafa;
-        color: #666;
-        border-radius: 999px;
-        padding: 2px 7px;
         font-size: 12px;
       }
 
@@ -654,6 +658,14 @@
       document.querySelector('.video-info-detail-list .item');
 
     return el?.innerText?.trim() || '';
+  }
+
+  function normalizeText(text) {
+    return String(text ?? '')
+      .replace(/\r?\n/g, ' ')
+      .replace(/\t/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
   }
 
   function toNumber(v) {
