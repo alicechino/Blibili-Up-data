@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         B站视频播放量和互动量（修复版）
-// @version      3.0.0
-// @description  辅助查看B站视频播放量、互动量，并复制横向填表数据
+// @name         B站视频播放量和互动量（修复增强版）
+// @version      3.1.0
+// @description  辅助查看B站视频播放量、互动量，并复制播放、互动、评论、弹幕、点赞、投币、收藏、分享等横向填表数据
 // @author       alicechino
 // @namespace    https://github.com/alicechino/Blibili-Up-data/
 // @match        *://www.bilibili.com/video/*
@@ -126,6 +126,7 @@
     const favorite = toNumber(stat.favorite);
     const share = toNumber(stat.share);
 
+    // 互动口径：弹幕 + 评论 + 点赞 + 投币 + 收藏 + 分享
     const engage = danmaku + reply + like + coin + favorite + share;
 
     const publishTime = video.pubdate
@@ -350,11 +351,16 @@
       },
       {
         id: 'getInfoBtn3',
+        text: '完整数据',
+        getText: data => getCopyForms(data).detailData,
+      },
+      {
+        id: 'getInfoBtn4',
         text: '舆情报告',
         getText: data => getCopyForms(data).formYuQing,
       },
       {
-        id: 'getInfoBtn4',
+        id: 'getInfoBtn5',
         text: '标题链接',
         getText: data => getCopyForms(data).formData3,
       },
@@ -385,6 +391,9 @@
   }
 
   function getCopyForms(data) {
+    // 填表数据1：现在包含播放、互动、评论、弹幕、点赞、投币、收藏、分享
+    // 字段顺序：
+    // UP名 / 标题 / 链接 / 发布时间 / 播放 / 互动 / 评论 / 弹幕 / 点赞 / 投币 / 收藏 / 分享
     const formData1 = [
       data.upName,
       data.title,
@@ -392,8 +401,16 @@
       data.publishTime,
       data.view,
       data.engage,
+      data.reply,
+      data.danmaku,
+      data.like,
+      data.coin,
+      data.favorite,
+      data.share,
     ].join('\t');
 
+    // 填表数据2：保留旧版简洁格式
+    // UP名 / 标题 / 链接 / 播放 / 发布时间 / 评论
     const formData2 = [
       data.upName,
       data.title,
@@ -413,6 +430,9 @@ ${data.url}
     const formData3 = `标题：${data.title}
 ${data.url}`;
 
+    // 完整数据：适合直接横向粘贴进 Excel
+    // 字段顺序：
+    // UP名 / 标题 / 链接 / 发布时间 / 播放 / 互动 / 评论 / 弹幕 / 点赞 / 投币 / 收藏 / 分享 / 粉丝 / 标签命中
     const detailData = [
       data.upName,
       data.title,
@@ -548,7 +568,7 @@ ${data.url}`;
         gap: 6px;
         align-items: center;
         flex-wrap: wrap;
-        max-width: 520px;
+        max-width: 620px;
       }
 
       #bili-video-data-buttons button {
