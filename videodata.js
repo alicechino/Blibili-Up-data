@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         B站视频播放量和互动量（修复增强版）
-// @version      3.1.0
-// @description  辅助查看B站视频播放量、互动量，并复制播放、互动、评论、弹幕、点赞、投币、收藏、分享等横向填表数据
+// @name         B站视频播放量和互动量（修复稳定版）
+// @version      3.2.0
+// @description  辅助查看B站视频播放量、互动量，并复制横向填表数据
 // @author       alicechino
 // @namespace    https://github.com/alicechino/Blibili-Up-data/
 // @match        *://www.bilibili.com/video/*
@@ -23,9 +23,8 @@
   };
 
   const CONFIG = {
-    refreshOnPageChange: true,
-    autoRefreshSeconds: 0, // 0 表示不自动刷新。需要自动刷新可以改成 30、60 等
-    showInlineInVideoInfo: true,
+    autoRefreshSeconds: 0,
+    showInlineInVideoInfo: false,
   };
 
   let lastVideoKey = '';
@@ -35,7 +34,7 @@
   injectStyle();
   createPanel();
   createButtons();
-  patchHistoryChange();
+  watchUrlChange();
   start();
 
   if (CONFIG.autoRefreshSeconds > 0) {
@@ -60,16 +59,12 @@
 
     const videoKey = id.bvid ? id.bvid : `av${id.aid}`;
 
-    if (silent && videoKey === lastVideoKey && currentData) {
-      return;
-    }
+    if (silent && videoKey === lastVideoKey && currentData) return;
 
     running = true;
     lastVideoKey = videoKey;
 
-    if (!silent) {
-      renderLoading('正在读取当前视频数据...');
-    }
+    if (!silent) renderLoading('正在读取当前视频数据...');
 
     try {
       const viewRes = await getVideoData(id);
@@ -82,23 +77,19 @@
 
       let stat = video.stat || {};
       const statRes = await safeGetArchiveStat(video);
-      if (statRes && statRes.code === 0 && statRes.data) {
-        stat = {
-          ...stat,
-          ...statRes.data,
-        };
+      if (statRes?.code === 0 && statRes.data) {
+        stat = { ...stat, ...statRes.data };
       }
 
       const tagList = await safeGetTags(video);
       const relation = await safeGetRelation(video.owner?.mid);
 
-      const data = buildData(video, stat, tagList, relation);
-      currentData = data;
+      currentData = buildData(video, stat, tagList, relation);
 
-      renderPanel(data);
-      renderInline(data);
+      renderPanel(currentData);
+      renderInline(currentData);
 
-      console.log('[B站视频播放量和互动量] 当前视频数据：', data);
+      console.log('[B站视频播放量和互动量] 当前视频数据：', currentData);
     } catch (err) {
       console.error('[B站视频播放量和互动量] 读取失败：', err);
       renderError(err.message || String(err));
@@ -126,7 +117,6 @@
     const favorite = toNumber(stat.favorite);
     const share = toNumber(stat.share);
 
-    // 互动口径：弹幕 + 评论 + 点赞 + 投币 + 收藏 + 分享
     const engage = danmaku + reply + like + coin + favorite + share;
 
     const publishTime = video.pubdate
@@ -142,7 +132,6 @@
     }
 
     const matchedKeywordIndexes = getMatchedKeywordIndexes(tags);
-
     const follower = toNumber(relation?.data?.follower);
 
     return {
@@ -171,9 +160,7 @@
   }
 
   async function getVideoData(id) {
-    if (id.bvid) {
-      return fetchJson(API.view, { bvid: id.bvid });
-    }
+    if (id.bvid) return fetchJson(API.view, { bvid: id.bvid });
     return fetchJson(API.view, { aid: id.aid });
   }
 
@@ -202,9 +189,7 @@
       if (video.aid) params.aid = video.aid;
 
       const res = await fetchJson(API.tags, params);
-      if (res?.code === 0 && Array.isArray(res.data)) {
-        return res.data;
-      }
+      if (res?.code === 0 && Array.isArray(res.data)) return res.data;
     } catch (err) {
       console.warn('[B站视频播放量和互动量] 标签读取失败：', err);
     }
@@ -227,6 +212,7 @@
 
   async function fetchJson(url, params = {}) {
     const u = new URL(url);
+
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
         u.searchParams.set(key, value);
@@ -255,16 +241,33 @@
     const pathname = window.location.pathname;
 
     const bvMatch = href.match(/\/video\/(BV[0-9A-Za-z]+)/i);
-    if (bvMatch) {
-      return { bvid: bvMatch[1], aid: '' };
-    }
+    if (bvMatch) return { bvid: bvMatch[1], aid: '' };
 
     const avMatch = pathname.match(/\/video\/av(\d+)/i) || href.match(/\/video\/av(\d+)/i);
-    if (avMatch) {
-      return { bvid: '', aid: avMatch[1] };
-    }
+    if (avMatch) return { bvid: '', aid: avMatch[1] };
 
     return null;
+  }
+
+  function watchUrlChange() {
+    let lastUrl = location.href;
+
+    setInterval(() => {
+      if (location.href === lastUrl) return;
+
+      lastUrl = location.href;
+
+      const id = getVideoIdFromUrl();
+      const key = id ? (id.bvid || `av${id.aid}`) : '';
+
+      if (key && key !== lastVideoKey) {
+        currentData = null;
+
+        setTimeout(() => {
+          loadVideoData(false);
+        }, 1200);
+      }
+    }, 1000);
   }
 
   function getMatchedKeywordIndexes(tags) {
@@ -278,17 +281,13 @@
       keywordsArr = [];
     }
 
-    if (!Array.isArray(keywordsArr) || !keywordsArr.length) {
-      return [];
-    }
-
-    const tagStrArr = Array.isArray(tags) ? tags : [];
+    if (!Array.isArray(keywordsArr) || !keywordsArr.length) return [];
 
     return keywordsArr.reduce((acc, keyword, index) => {
       const kw = String(keyword || '').trim();
       if (!kw) return acc;
 
-      if (tagStrArr.some(tag => String(tag || '').includes(kw))) {
+      if (tags.some(tag => String(tag || '').includes(kw))) {
         acc.push(index + 1);
       }
 
@@ -371,10 +370,9 @@
       btn.id = item.id;
       btn.type = 'button';
       btn.textContent = item.text;
+
       btn.addEventListener('click', async () => {
-        if (!currentData) {
-          await loadVideoData(false);
-        }
+        if (!currentData) await loadVideoData(false);
 
         if (!currentData) {
           alert('还没有读取到视频数据');
@@ -391,9 +389,6 @@
   }
 
   function getCopyForms(data) {
-    // 填表数据1：现在包含播放、互动、评论、弹幕、点赞、投币、收藏、分享
-    // 字段顺序：
-    // UP名 / 标题 / 链接 / 发布时间 / 播放 / 互动 / 评论 / 弹幕 / 点赞 / 投币 / 收藏 / 分享
     const formData1 = [
       data.upName,
       data.title,
@@ -409,8 +404,6 @@
       data.share,
     ].join('\t');
 
-    // 填表数据2：保留旧版简洁格式
-    // UP名 / 标题 / 链接 / 播放 / 发布时间 / 评论
     const formData2 = [
       data.upName,
       data.title,
@@ -430,9 +423,6 @@ ${data.url}
     const formData3 = `标题：${data.title}
 ${data.url}`;
 
-    // 完整数据：适合直接横向粘贴进 Excel
-    // 字段顺序：
-    // UP名 / 标题 / 链接 / 发布时间 / 播放 / 互动 / 评论 / 弹幕 / 点赞 / 投币 / 收藏 / 分享 / 粉丝 / 标签命中
     const detailData = [
       data.upName,
       data.title,
@@ -494,41 +484,11 @@ ${data.url}`;
 
   function renderInline(data) {
     if (!CONFIG.showInlineInVideoInfo) return;
-
-    const dataList =
-      document.querySelector('.video-info-detail-list.video-info-detail-content') ||
-      document.querySelector('.video-info-detail-list') ||
-      document.querySelector('.video-data-list') ||
-      document.querySelector('.video-info-meta');
-
-    if (!dataList) return;
-
-    let inline = document.querySelector('#bili-video-data-inline');
-
-    if (!inline) {
-      inline = document.createElement('span');
-      inline.id = 'bili-video-data-inline';
-      inline.className = 'item';
-      dataList.insertAdjacentElement('afterbegin', inline);
-    }
-
-    inline.innerHTML = `
-      <span class="bvd-inline-red"><b>播:${data.view}</b></span>
-      <span class="bvd-inline-blue"><b>互:${data.engage}</b></span>
-      <span><b>弹:${data.danmaku}</b></span>
-      <span><b>评:${data.reply}</b></span>
-      <span><b>赞:${data.like}</b></span>
-      <span><b>币:${data.coin}</b></span>
-      <span><b>藏:${data.favorite}</b></span>
-      <span><b>转:${data.share}</b></span>
-      <span><b>标:${data.matchedKeywordIndexes.length ? data.matchedKeywordIndexes.join('') : '0'}</b></span>
-    `;
   }
 
   function renderLoading(text) {
     const body = document.querySelector('#bvdp-body');
     if (!body) return;
-
     body.innerHTML = `<div class="bvdp-loading">${escapeHtml(text)}</div>`;
   }
 
@@ -737,23 +697,6 @@ ${data.url}`;
         font-size: 12px;
       }
 
-      #bili-video-data-inline {
-        display: inline-flex;
-        gap: 5px;
-        flex-wrap: wrap;
-        margin-right: 8px;
-        color: #9c27b0;
-        font-size: 13px;
-      }
-
-      #bili-video-data-inline .bvd-inline-red {
-        color: #e11;
-      }
-
-      #bili-video-data-inline .bvd-inline-blue {
-        color: #007fec;
-      }
-
       @media (max-width: 560px) {
         #bili-video-data-panel {
           width: calc(100vw - 24px);
@@ -780,7 +723,7 @@ ${data.url}`;
     try {
       if (typeof GM_setClipboard === 'function') {
         GM_setClipboard(text, 'text');
-      } else if (navigator.clipboard && navigator.clipboard.writeText) {
+      } else if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
       } else {
         fallbackCopyText(text);
@@ -844,43 +787,6 @@ ${data.url}`;
     } catch (_) {}
   }
 
-  function patchHistoryChange() {
-    if (!CONFIG.refreshOnPageChange) return;
-    if (window.__biliVideoDataHistoryPatched) return;
-
-    window.__biliVideoDataHistoryPatched = true;
-
-    const rawPushState = history.pushState;
-    const rawReplaceState = history.replaceState;
-
-    history.pushState = function () {
-      const ret = rawPushState.apply(this, arguments);
-      window.dispatchEvent(new Event('bili-video-data-location-change'));
-      return ret;
-    };
-
-    history.replaceState = function () {
-      const ret = rawReplaceState.apply(this, arguments);
-      window.dispatchEvent(new Event('bili-video-data-location-change'));
-      return ret;
-    };
-
-    window.addEventListener('popstate', () => {
-      window.dispatchEvent(new Event('bili-video-data-location-change'));
-    });
-
-    window.addEventListener('bili-video-data-location-change', () => {
-      setTimeout(() => {
-        const id = getVideoIdFromUrl();
-        const key = id ? (id.bvid || `av${id.aid}`) : '';
-        if (key && key !== lastVideoKey) {
-          currentData = null;
-          loadVideoData(false);
-        }
-      }, 600);
-    });
-  }
-
   function getDomTitle() {
     const h1 = document.querySelector('h1');
     return h1?.title || h1?.innerText?.trim() || document.title.replace('_哔哩哔哩_bilibili', '').trim();
@@ -923,6 +829,7 @@ ${data.url}`;
   function fmt(v) {
     const n = Number(v);
     if (!Number.isFinite(n)) return '-';
+
     return new Intl.NumberFormat('zh-CN', {
       maximumFractionDigits: 0,
     }).format(n);
@@ -932,9 +839,7 @@ ${data.url}`;
     const n = Number(num);
     const d = Number(den);
 
-    if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) {
-      return '-';
-    }
+    if (!Number.isFinite(n) || !Number.isFinite(d) || d <= 0) return '-';
 
     return new Intl.NumberFormat('zh-CN', {
       style: 'percent',
@@ -946,9 +851,7 @@ ${data.url}`;
   function formatTime(input) {
     const d = input instanceof Date ? input : new Date(input);
 
-    if (!Number.isFinite(d.getTime())) {
-      return '';
-    }
+    if (!Number.isFinite(d.getTime())) return '';
 
     const pad = n => String(n).padStart(2, '0');
 
